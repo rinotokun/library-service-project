@@ -2,4 +2,4 @@ from django.apps import AppConfig
 
 
 class NotificationsServiceConfig(AppConfig):
-    name = 'notifications_service'
+    name = "notifications_service"
