@@ -50,6 +50,7 @@ class UserApiTest(TestCase):
         self.client.force_authenticate(user)
 
         result = self.client.patch(USER_MANAGE_URL, {"password": "Superpass"})
+        user.refresh_from_db()
 
         self.assertEqual(result.status_code, status.HTTP_200_OK)
         self.assertTrue(user.check_password("Superpass"))
