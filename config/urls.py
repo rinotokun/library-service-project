@@ -4,7 +4,7 @@ from django.urls import path, include
 urlpatterns = [
     path("admin/", admin.site.urls),
     path(
-        "api/user/",
+        "users/",
         include("users_service.urls", namespace="users_service")
     )
 ]
