@@ -2,4 +2,5 @@ from django.apps import AppConfig
 
 
 class UsersServiceConfig(AppConfig):
-    name = 'users_service'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "users_service"
