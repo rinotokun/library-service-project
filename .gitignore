@@ -1,0 +1,6 @@
+task/
+venv/
+__pycache__/
+.DS_Store
+.env
+db.sqlite3
