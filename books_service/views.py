@@ -1,4 +1,6 @@
-from rest_framework import viewsets
+from django.db.models.deletion import ProtectedError
+from rest_framework import status, viewsets
+from rest_framework.response import Response
 
 from books_service.models import Book
 from books_service.permissions import IsAdminOrReadOnly
@@ -14,3 +16,16 @@ class BookViewSet(viewsets.ModelViewSet):
             return BookListSerializer
 
         return BookSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        try:
+            self.perform_destroy(instance)
+        except ProtectedError:
+            return Response(
+                {"detail": "Cannot delete a borrowed book"},
+                status=status.HTTP_409_CONFLICT
+            )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
