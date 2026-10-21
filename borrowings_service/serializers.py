@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -18,6 +19,15 @@ class BorrowingSerializer(serializers.ModelSerializer):
 
         return value
 
+    def validate_book(self, value):
+
+        if not value.is_available:
+            raise serializers.ValidationError(
+                "Cannot borrow unavailable book"
+            )
+
+        return value
+
     class Meta:
         model = Borrowing
         fields = (
@@ -30,8 +40,22 @@ class BorrowingSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("borrow_date", "actual_return_date", "user",)
 
+    def create(self, validated_data):
+        with transaction.atomic():
+            book = validated_data.pop("book")
+
+            book.inventory -= 1
+            book.save(update_fields=["inventory"])
+
+            borrowing = Borrowing.objects.create(book=book, **validated_data)
+
+            return borrowing
+
 
 class BorrowingListSerializer(serializers.ModelSerializer):
+    book = serializers.SlugRelatedField(
+        many=False, read_only=True, slug_field="title"
+    )
     user = UserShortInfoSerializer(many=False, read_only=True)
     is_active = serializers.BooleanField(read_only=True)
 
