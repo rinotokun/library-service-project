@@ -24,7 +24,7 @@ class BookViewSet(viewsets.ModelViewSet):
             self.perform_destroy(instance)
         except ProtectedError:
             return Response(
-                {"detail": "Cannot delete a borrowed book"},
+                {"detail": "Cannot delete a book with borrowing history"},
                 status=status.HTTP_409_CONFLICT
             )
 
