@@ -264,10 +264,7 @@ class AuthenticatedBorrowingApiTests(TestCase):
         book_one_inventory_after_return = self.book_one.inventory
 
         borrowings = self.client.get(BORROWING_URL)
-        borrowings_ids = [
-            borrowing["id"]
-            for borrowing in borrowings.data
-        ]
+        borrowings_ids = [borrowing["id"] for borrowing in borrowings.data]
         self.assertIn(borrowing_result.data["id"], borrowings_ids)
 
         for borrowing in borrowings.data:
@@ -377,3 +374,149 @@ class AdminBorrowingApiTests(TestCase):
             result_return_borrowing.status_code, status.HTTP_200_OK
         )
         self.assertTrue(Book.objects.filter(id=self.book_one.id).exists())
+
+
+@override_settings(CACHES=DUMMY_CACHE)
+class BorrowingFilterApiTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = get_user_model().objects.create_user(
+            email="admin@admin.com", password="password", is_staff=True
+        )
+
+        self.user1 = get_user_model().objects.create_user(
+            email="user1@user.com",
+            password="password",
+        )
+        self.user2 = get_user_model().objects.create_user(
+            email="user2@user.com",
+            password="password",
+        )
+
+        self.book_one = sample_book(title="One")
+        self.book_two = sample_book(title="Two")
+        self.book_three = sample_book(title="Three")
+
+        self.borrowing_admin = sample_borrowing(self.admin, book=self.book_one)
+        self.returned_borrowing_admin = sample_borrowing(
+            self.admin,
+            book=sample_book(title="Four"),
+            actual_return_date=timezone.localdate(),
+        )
+        self.borrowing_user1 = sample_borrowing(self.user1, book=self.book_two)
+        self.returned_borrowing_user1 = sample_borrowing(
+            self.user1,
+            book=sample_book(title="Five"),
+            actual_return_date=timezone.localdate(),
+        )
+        self.borrowing_user2 = sample_borrowing(
+            self.user2, book=self.book_three
+        )
+        self.returned_borrowing_user2 = sample_borrowing(
+            self.user2,
+            book=sample_book(title="Six"),
+            actual_return_date=timezone.localdate(),
+        )
+
+    def test_is_active_true_for_not_staff(self):
+        self.client.force_authenticate(self.user1)
+
+        result = self.client.get(BORROWING_URL, {"is_active": "true"})
+
+        borrowings_ids = [borrowing["id"] for borrowing in result.data]
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertIn(self.borrowing_user1.id, borrowings_ids)
+        self.assertEqual(len(borrowings_ids), 1)
+
+    def test_is_active_false_for_not_staff(self):
+        self.client.force_authenticate(self.user1)
+
+        result = self.client.get(BORROWING_URL, {"is_active": "false"})
+
+        borrowings_ids = [borrowing["id"] for borrowing in result.data]
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertIn(self.returned_borrowing_user1.id, borrowings_ids)
+        self.assertEqual(len(borrowings_ids), 1)
+
+    def test_user_id_ignored_if_not_staff(self):
+        self.client.force_authenticate(self.user1)
+
+        result = self.client.get(BORROWING_URL, {"user_id": self.admin.id})
+
+        user_ids = [borrowing["user"]["id"] for borrowing in result.data]
+        borrowings_user1 = Borrowing.objects.filter(user=self.user1).count()
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertIn(self.user1.id, user_ids)
+        self.assertNotIn(self.admin.id, user_ids)
+        self.assertNotIn(self.user2.id, user_ids)
+        self.assertEqual(len(user_ids), borrowings_user1)
+
+    def test_admin_get_by_user_id_returns_only_target_user_data(self):
+        self.client.force_authenticate(self.admin)
+
+        result = self.client.get(BORROWING_URL, {"user_id": self.user1.id})
+
+        user_ids = [borrowing["user"]["id"] for borrowing in result.data]
+        borrowings_user1 = Borrowing.objects.filter(user=self.user1).count()
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertIn(self.user1.id, user_ids)
+        self.assertNotIn(self.admin.id, user_ids)
+        self.assertNotIn(self.user2.id, user_ids)
+        self.assertEqual(len(user_ids), borrowings_user1)
+
+    def test_filter_by_user_id_and_is_active_combined_success(self):
+        self.client.force_authenticate(self.admin)
+
+        result = self.client.get(
+            BORROWING_URL, {"user_id": self.user1.id, "is_active": "false"}
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(result.data), 1)
+        self.assertEqual(
+            result.data[0]["id"], self.returned_borrowing_user1.id
+        )
+
+    def test_is_active_case_insensitivity(self):
+        self.client.force_authenticate(self.admin)
+
+        for value in ("False", "false", "FALSE"):
+            with self.subTest(is_active=value):
+                result = self.client.get(BORROWING_URL, {"is_active": value})
+
+                borrowings = Borrowing.objects.filter(
+                    actual_return_date__isnull=False
+                )
+                serializer = BorrowingListSerializer(borrowings, many=True)
+
+                expected_borrowings = [
+                    borrowing["id"] for borrowing in serializer.data
+                ]
+                actual_borrowings = [
+                    borrowing["id"] for borrowing in result.data
+                ]
+
+                self.assertEqual(result.status_code, status.HTTP_200_OK)
+                self.assertEqual(
+                    set(expected_borrowings), set(actual_borrowings)
+                )
+
+    def test_is_active_invalid_integer_returns_400_with_field_error(self):
+        self.client.force_authenticate(self.admin)
+
+        result = self.client.get(BORROWING_URL, {"is_active": 1})
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("is_active", result.data)
+
+    def test_user_id_invalid_string_returns_400_with_field_error(self):
+        self.client.force_authenticate(self.admin)
+
+        result = self.client.get(BORROWING_URL, {"user_id": "fafa"})
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("user_id", result.data)
