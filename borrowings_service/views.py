@@ -20,16 +20,46 @@ class BorrowingViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
-    viewsets.GenericViewSet
+    viewsets.GenericViewSet,
 ):
-    queryset = Borrowing.objects.select_related(
-        "book", "user"
-    ).annotate(is_active=Q(actual_return_date__isnull=True))
+    queryset = Borrowing.objects.select_related("book", "user").annotate(
+        is_active=Q(actual_return_date__isnull=True)
+    )
     serializer_class = BorrowingSerializer
     permission_classes = (IsAuthenticated,)
 
+    @staticmethod
+    def _user_id_convert(user_id: str | None) -> int | None:
+        if user_id:
+            return int(user_id) if user_id.isdecimal() else None
+
     def get_queryset(self):
+        is_active = self.request.query_params.get("is_active")
+        user_id = self.request.query_params.get("user_id")
+
         queryset = super().get_queryset()
+
+        if is_active:
+            if is_active.lower() == "true":
+                queryset = queryset.filter(is_active=True)
+            elif is_active.lower() == "false":
+                queryset = queryset.filter(is_active=False)
+            else:
+                raise ValidationError(
+                    {
+                        "is_active": (
+                            "This field can only be entered as True or False."
+                        )
+                    },
+                )
+
+        if user_id and self.request.user.is_staff:
+            user_id = self._user_id_convert(user_id)
+            if user_id is None:
+                raise ValidationError(
+                    {"user_id": "This field can only contain an integer."},
+                )
+            queryset = queryset.filter(user_id=user_id)
 
         if not self.request.user.is_staff:
             queryset = queryset.filter(user=self.request.user)
