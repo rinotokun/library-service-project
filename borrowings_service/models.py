@@ -41,10 +41,4 @@ class Borrowing(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"Borrow date: {self.borrow_date}\n"
-            f"Expected return date: {self.expected_return_date}\n"
-            f"Actual return date: {self.actual_return_date}\n"
-            f"Book: {self.book.title}\n"
-            f"User: {self.user.email}"
-        )
+        return f"#{self.id} | {self.book.title} | {self.user.email}"
