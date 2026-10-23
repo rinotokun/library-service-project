@@ -9,5 +9,9 @@ urlpatterns = [
         "borrowings/",
         include("borrowings_service.urls", namespace="borrowings_service"),
     ),
+    path(
+        "payments/",
+        include("payments_service.urls", namespace="payments_service"),
+    ),
     path("__debug__/", include("debug_toolbar.urls")),
 ]
