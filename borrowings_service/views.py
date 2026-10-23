@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
 from borrowings_service.models import Borrowing
+from notifications_service.tasks import notify_admin_via_telegram
 from borrowings_service.serializers import (
     BorrowingDetailSerializer,
     BorrowingListSerializer,
@@ -76,7 +77,15 @@ class BorrowingViewSet(
         return BorrowingSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        borrowing = serializer.save(user=self.request.user)
+        message = (
+            "🔔 New Book Borrowing!\n\n"
+            f"📖 Book: «{borrowing.book}»\n"
+            f"👤 User: {borrowing.user}\n"
+            f"📅 Borrow Date: {borrowing.borrow_date}\n"
+            f"⏳ Expected Return: {borrowing.expected_return_date}"
+        )
+        notify_admin_via_telegram.delay(message)
 
     @action(
         methods=["POST"],
