@@ -178,7 +178,7 @@ CELERY_TASK_IGNORE_RESULT = True
 
 CELERY_BEAT_SCHEDULE = {
     "notify_overdue_borrowings_daily_via_telegram": {
-        "task": "notify_overdue_borrowings_daily",
+        "task": "notify_overdue_borrowings",
         "schedule": crontab(hour=8, minute=0),
     }
 }

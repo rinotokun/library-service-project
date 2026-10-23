@@ -19,11 +19,11 @@ def notify_admin_via_telegram(message: str):
 
 
 @shared_task(
-    name="notify_overdue_borrowings_daily",
+    name="notify_overdue_borrowings",
     base=QueueOnce,
     once={"timeout": 120},
 )
-def notify_overdue_borrowings_daily():
+def notify_overdue_borrowings():
     overdue_borrowings = Borrowing.objects.select_related(
         "book", "user"
     ).filter(
