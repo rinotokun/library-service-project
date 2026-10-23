@@ -14,6 +14,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 
@@ -47,6 +48,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_celery_beat",
     "debug_toolbar",
     "rest_framework",
     "books_service",
@@ -173,6 +175,14 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
 CELERY_TIMEZONE = "Europe/Kyiv"
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_TASK_IGNORE_RESULT = True
+
+CELERY_BEAT_SCHEDULE = {
+    "notify_overdue_borrowings_daily_via_telegram": {
+        "task": "notify_overdue_borrowings",
+        "schedule": crontab(hour=8, minute=0),
+    }
+}
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 CELERY_ONCE = {
     "backend": "celery_once.backends.Redis",
