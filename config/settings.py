@@ -9,9 +9,15 @@ https://docs.djangoproject.com/en/6.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
+import os
 
 from datetime import timedelta
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-p$9k6#6(+r2gi12+(rtlw+vae#pnf1p&0q%f$vm^4w2mx+ot_k"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -118,7 +124,7 @@ AUTH_USER_MODEL = "users_service.User"
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Europe/Kyiv"
 
 USE_I18N = True
 
@@ -153,4 +159,25 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": False,
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZE",
+}
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GROUP_ID = os.getenv("GROUP_ID")
+URL_SEND_MESSAGE = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
+CELERY_TIMEZONE = "Europe/Kyiv"
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_TASK_IGNORE_RESULT = True
+
+CELERY_ONCE = {
+    "backend": "celery_once.backends.Redis",
+    "settings": {
+        "url": os.getenv("CELERY_BROKER_URL") + "/0",
+        "default_timeout": 60 * 60,
+    },
 }
