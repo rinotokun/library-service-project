@@ -144,8 +144,11 @@ class AuthenticatedBorrowingApiTests(TestCase):
 
         self.assertEqual(result.status_code, status.HTTP_404_NOT_FOUND)
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
-    def test_borrowing_book_if_available(self, mock_notify_via_telegram):
+    def test_borrowing_book_if_available(
+        self, mock_notify_via_telegram, mock_create_checkout_session
+    ):
         payload = {
             "expected_return_date": timezone.localdate() + timedelta(days=1),
             "book": self.book_one.id,
@@ -177,9 +180,10 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertIn(self.user1.email, message)
         self.assertIn(self.book_one.title, message)
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
     def test_borrowing_book_with_zero_inventory(
-        self, mock_notify_via_telegram
+        self, mock_notify_via_telegram, mock_create_checkout_session
     ):
         book = sample_book(title="Three", inventory=0)
         payload = {
@@ -246,8 +250,11 @@ class AuthenticatedBorrowingApiTests(TestCase):
             book_one_inventory_after_borrowing,
         )
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
-    def test_ignore_borrow_date_and_user(self, mock_notify_via_telegram):
+    def test_ignore_borrow_date_and_user(
+        self, mock_notify_via_telegram, mock_create_checkout_session
+    ):
         borrow_date = timezone.localdate() - timedelta(days=1)
         payload = {
             "expected_return_date": timezone.localdate() + timedelta(days=1),
@@ -270,8 +277,11 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertNotIn(borrow_date.strftime("%Y-%m-%d"), message)
         self.assertNotIn(self.user2.email, message)
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
-    def test_borrow_return_endpoint(self, mock_notify_via_telegram):
+    def test_borrow_return_endpoint(
+        self, mock_notify_via_telegram, mock_create_checkout_session
+    ):
         payload = {
             "expected_return_date": timezone.localdate() + timedelta(days=1),
             "book": self.book_one.id,
