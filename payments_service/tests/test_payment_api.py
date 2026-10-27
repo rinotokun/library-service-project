@@ -1,5 +1,8 @@
+import uuid
+
 from decimal import Decimal
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -21,6 +24,8 @@ DUMMY_CACHE = {
 
 
 PAYMENT_URL = reverse("payments_service:payment-list")
+PAYMENT_SUCCESS_URL = reverse("payments_service:payment-success")
+PAYMENT_CANCEL_URL = reverse("payments_service:payment-cancel")
 
 
 def payment_detail_url(payment_id):
@@ -58,7 +63,7 @@ def sample_payment(borrowing, **params):
         "payment_type": Payment.PaymentType.PAYMENT,
         "borrowing": borrowing,
         "session_url": "http://127.0.0.1/",
-        "session_id": "cs_test_12345",
+        "session_id": f"cs_test_{uuid.uuid4()}",
         "money_to_pay": Decimal("1.49"),
     }
     defaults.update(params)
@@ -89,6 +94,122 @@ class UnauthenticatedPaymentApiTests(TestCase):
             result_detail.status_code, status.HTTP_401_UNAUTHORIZED
         )
 
+    @patch("payments_service.views.stripe.checkout.Session.retrieve")
+    def test_success_response_400_when_session_id_missing(
+        self, mock_stripe_retrieve
+    ):
+        result = self.client.get(PAYMENT_SUCCESS_URL)
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            result.data["detail"], "The session id parameter is missing."
+        )
+        mock_stripe_retrieve.assert_not_called()
+
+    @patch("payments_service.views.stripe.checkout.Session.retrieve")
+    def test_success_response_400_when_session_id_not_found(
+        self, mock_stripe_retrieve
+    ):
+        result = self.client.get(
+            PAYMENT_SUCCESS_URL, {"session_id": "invalid"}
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            result.data["detail"],
+            "There is no payment session with this session_id.",
+        )
+        mock_stripe_retrieve.assert_not_called()
+
+    @patch("payments_service.views.stripe.checkout.Session.retrieve")
+    def test_success_when_payment_is_paid(self, mock_stripe_retrieve):
+        mock_stripe_retrieve.return_value = {"payment_status": "paid"}
+
+        result = self.client.get(
+            PAYMENT_SUCCESS_URL, {"session_id": self.payment.session_id}
+        )
+        self.payment.refresh_from_db()
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            result.data["detail"],
+            "Payment was successful! Thank you for your purchase!",
+        )
+        self.assertEqual(self.payment.status, Payment.Status.PAID)
+
+    @patch("payments_service.views.stripe.checkout.Session.retrieve")
+    def test_success_when_payment_is_already_paid(self, mock_stripe_retrieve):
+        self.payment.status = Payment.Status.PAID
+        self.payment.save(update_fields=["status"])
+        mock_stripe_retrieve.return_value = {"payment_status": "paid"}
+
+        result = self.client.get(
+            PAYMENT_SUCCESS_URL, {"session_id": self.payment.session_id}
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(result.data["detail"], "Your borrowing already paid!")
+
+    @patch("payments_service.views.stripe.checkout.Session.retrieve")
+    def test_success_when_payment_is_unpaid(self, mock_stripe_retrieve):
+        mock_stripe_retrieve.return_value = {"payment_status": "unpaid"}
+
+        result = self.client.get(
+            PAYMENT_SUCCESS_URL, {"session_id": self.payment.session_id}
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            result.data["detail"],
+            (
+                "Payment has not been received yet. "
+                "Please wait or try again later."
+            ),
+        )
+
+    def test_cancel_response_400_when_session_id_missing(self):
+        result = self.client.get(PAYMENT_CANCEL_URL)
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            result.data["detail"], "The session id parameter is missing."
+        )
+
+    def test_cancel_response_400_when_session_id_not_found(self):
+        result = self.client.get(PAYMENT_CANCEL_URL, {"session_id": "invalid"})
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            result.data["detail"],
+            "There is no payment session with this session_id.",
+        )
+
+    def test_cancel_when_payment_is_unpaid(self):
+        result = self.client.get(
+            PAYMENT_CANCEL_URL, {"session_id": self.payment.session_id}
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(result.data["url"], self.payment.session_url)
+        self.assertEqual(
+            result.data["message"],
+            (
+                "You can pay later, the payment "
+                "link is only available for 24 hours."
+            ),
+        )
+
+    def test_cancel_when_payment_is_paid(self):
+        self.payment.status = Payment.Status.PAID
+        self.payment.save(update_fields=["status"])
+
+        result = self.client.get(
+            PAYMENT_CANCEL_URL, {"session_id": self.payment.session_id}
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(result.data["detail"], "Your borrowing already paid!")
+
 
 @override_settings(CACHES=DUMMY_CACHE)
 class AuthenticatedPaymentApiTests(TestCase):
@@ -112,7 +233,6 @@ class AuthenticatedPaymentApiTests(TestCase):
         self.payment_user2 = sample_payment(
             self.borrowing_user2,
             session_url="http://0.0.0.0/",
-            session_id="cs_test_54321",
         )
 
     def test_payment_list(self):
@@ -209,7 +329,6 @@ class AdminPaymentApiTests(TestCase):
         self.payment_user2 = sample_payment(
             self.borrowing_user2,
             session_url="http://0.0.0.0/",
-            session_id="cs_test_54321",
         )
         self.book_admin = sample_book(title="Admin")
         self.borrowing_admin = sample_borrowing(
@@ -218,7 +337,6 @@ class AdminPaymentApiTests(TestCase):
         self.payment_admin = sample_payment(
             self.borrowing_admin,
             session_url="http://1.1.1.1/",
-            session_id="cs_test_54321_admin",
         )
 
     def test_admin_can_get_all_payments(self):

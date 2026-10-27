@@ -4,7 +4,10 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
+
+from rest_framework.test import APIRequestFactory
 
 from books_service.models import Book
 
@@ -57,8 +60,17 @@ class CreateCheckoutSessionTests(TestCase):
             "url": "http://stripe-session",
             "id": "id_stripe_session",
         }
+        factory = APIRequestFactory()
+        request = factory.get("/notes/")
 
-        create_checkout_session(self.borrowing)
+        success_url = request.build_absolute_uri(
+            reverse("payments_service:payment-success")
+        )
+        cancel_url = request.build_absolute_uri(
+            reverse("payments_service:payment-cancel")
+        )
+
+        create_checkout_session(self.borrowing, request)
 
         payment = Payment.objects.last()
 
@@ -83,9 +95,8 @@ class CreateCheckoutSessionTests(TestCase):
                     "quantity": 1,
                 }
             ],
-            "success_url": (
-                "http://127.0.0.1:8000/?session_id={CHECKOUT_SESSION_ID}"
-            ),
+            "success_url": success_url + "?session_id={CHECKOUT_SESSION_ID}",
+            "cancel_url": cancel_url + "?session_id={CHECKOUT_SESSION_ID}",
         }
         actual_kwargs = mock_stripe_checkout_session_create.call_args.kwargs
 
