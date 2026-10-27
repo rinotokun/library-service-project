@@ -88,7 +88,7 @@ class BorrowingViewSet(
             borrowing = serializer.save(user=self.request.user)
 
             try:
-                create_checkout_session(borrowing)
+                create_checkout_session(borrowing, self.request)
             except stripe.StripeError:
                 raise ServiceUnavailable
 

@@ -1,16 +1,23 @@
 import stripe
 
-from django.conf import settings
+from django.urls import reverse
+
+from rest_framework.request import Request
 
 from borrowings_service.models import Borrowing
 from payments_service.models import Payment
 
-stripe.api_key = settings.STRIPE_SECRET_KEY
 
-
-def create_checkout_session(borrowing: Borrowing):
+def create_checkout_session(borrowing: Borrowing, request: Request):
     borrowing_days = borrowing.expected_return_date - borrowing.borrow_date
     unit_amount = borrowing.book.daily_fee * borrowing_days.days
+
+    success_url = request.build_absolute_uri(
+        location=reverse("payments_service:payment-success")
+    )
+    cancel_url = request.build_absolute_uri(
+        reverse("payments_service:payment-cancel")
+    )
 
     session = stripe.checkout.Session.create(
         mode="payment",
@@ -24,7 +31,8 @@ def create_checkout_session(borrowing: Borrowing):
                 "quantity": 1,
             }
         ],
-        success_url="http://127.0.0.1:8000/?session_id={CHECKOUT_SESSION_ID}",
+        success_url=success_url + "?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=cancel_url + "?session_id={CHECKOUT_SESSION_ID}",
     )
 
     Payment.objects.create(
