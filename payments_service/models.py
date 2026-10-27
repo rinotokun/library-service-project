@@ -23,7 +23,7 @@ class Payment(models.Model):
         Borrowing, on_delete=models.PROTECT, related_name="payments"
     )
     session_url = models.URLField(max_length=500)
-    session_id = models.CharField()
+    session_id = models.CharField(unique=True)
     money_to_pay = models.DecimalField(max_digits=8, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
 
