@@ -1,6 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import patch, ANY
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -183,7 +183,7 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertIn(self.book_one.title, message)
 
         borrowing = Borrowing.objects.get(id=result.data["id"])
-        mock_create_checkout_session.assert_called_once_with(borrowing)
+        mock_create_checkout_session.assert_called_once_with(borrowing, ANY)
 
     @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
