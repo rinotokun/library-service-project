@@ -7,10 +7,22 @@ from rest_framework.request import Request
 from borrowings_service.models import Borrowing
 from payments_service.models import Payment
 
+FINE_MULTIPLIER = 2
 
-def create_checkout_session(borrowing: Borrowing, request: Request):
+
+def create_checkout_session(
+    borrowing: Borrowing, request: Request, is_fine: bool = False
+):
     borrowing_days = borrowing.expected_return_date - borrowing.borrow_date
     unit_amount = borrowing.book.daily_fee * borrowing_days.days
+
+    if is_fine:
+        fine_days = (
+            borrowing.actual_return_date - borrowing.expected_return_date
+        )
+        unit_amount = (
+            borrowing.book.daily_fee * fine_days.days * FINE_MULTIPLIER
+        )
 
     success_url = request.build_absolute_uri(
         reverse("payments_service:payment-success")
@@ -35,9 +47,13 @@ def create_checkout_session(borrowing: Borrowing, request: Request):
         cancel_url=cancel_url + "?session_id={CHECKOUT_SESSION_ID}",
     )
 
+    payment_type = (
+        Payment.PaymentType.FINE if is_fine else Payment.PaymentType.PAYMENT
+    )
+
     Payment.objects.create(
         status=Payment.Status.PENDING,
-        payment_type=Payment.PaymentType.PAYMENT,
+        payment_type=payment_type,
         borrowing=borrowing,
         session_url=session["url"],
         session_id=session["id"],
