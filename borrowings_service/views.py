@@ -123,4 +123,10 @@ class BorrowingViewSet(
             borrowing.save(update_fields=["actual_return_date"])
             serializer = BorrowingDetailSerializer(borrowing)
 
+            if borrowing.actual_return_date > borrowing.expected_return_date:
+                try:
+                    create_checkout_session(borrowing, self.request, True)
+                except stripe.StripeError:
+                    raise ServiceUnavailable
+
             return Response(serializer.data, status=status.HTTP_200_OK)
