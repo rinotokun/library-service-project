@@ -1,3 +1,5 @@
+import stripe
+
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -8,8 +10,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
-from borrowings_service.models import Borrowing
 from notifications_service.tasks import notify_admin_via_telegram
+
+from borrowings_service.models import Borrowing
+from borrowings_service.exceptions import ServiceUnavailable
+from borrowings_service.services import create_checkout_session
 from borrowings_service.serializers import (
     BorrowingDetailSerializer,
     BorrowingListSerializer,
@@ -23,8 +28,10 @@ class BorrowingViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
-    queryset = Borrowing.objects.select_related("book", "user").annotate(
-        is_active=Q(actual_return_date__isnull=True)
+    queryset = (
+        Borrowing.objects.select_related("book", "user")
+        .prefetch_related("payments")
+        .annotate(is_active=Q(actual_return_date__isnull=True))
     )
     serializer_class = BorrowingSerializer
     permission_classes = (IsAuthenticated,)
@@ -77,15 +84,22 @@ class BorrowingViewSet(
         return BorrowingSerializer
 
     def perform_create(self, serializer):
-        borrowing = serializer.save(user=self.request.user)
-        message = (
-            "🔔 New Book Borrowing!\n\n"
-            f"📖 Book: «{borrowing.book}»\n"
-            f"👤 User: {borrowing.user}\n"
-            f"📅 Borrow Date: {borrowing.borrow_date}\n"
-            f"⏳ Expected Return: {borrowing.expected_return_date}"
-        )
-        notify_admin_via_telegram.delay(message)
+        with transaction.atomic():
+            borrowing = serializer.save(user=self.request.user)
+
+            try:
+                create_checkout_session(borrowing)
+            except stripe.StripeError:
+                raise ServiceUnavailable
+
+            message = (
+                "🔔 New Book Borrowing!\n\n"
+                f"📖 Book: «{borrowing.book}»\n"
+                f"👤 User: {borrowing.user}\n"
+                f"📅 Borrow Date: {borrowing.borrow_date}\n"
+                f"⏳ Expected Return: {borrowing.expected_return_date}"
+            )
+            notify_admin_via_telegram.delay(message)
 
     @action(
         methods=["POST"],

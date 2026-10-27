@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from rest_framework.test import APIClient
 from rest_framework import status
+import stripe
 
 from books_service.models import Book
 
@@ -18,6 +19,7 @@ from borrowings_service.serializers import (
     BorrowingDetailSerializer,
 )
 
+from payments_service.models import Payment
 from users_service.serializers import UserShortInfoSerializer
 
 DUMMY_CACHE = {
@@ -144,8 +146,11 @@ class AuthenticatedBorrowingApiTests(TestCase):
 
         self.assertEqual(result.status_code, status.HTTP_404_NOT_FOUND)
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
-    def test_borrowing_book_if_available(self, mock_notify_via_telegram):
+    def test_borrowing_book_if_available(
+        self, mock_notify_via_telegram, mock_create_checkout_session
+    ):
         payload = {
             "expected_return_date": timezone.localdate() + timedelta(days=1),
             "book": self.book_one.id,
@@ -177,9 +182,13 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertIn(self.user1.email, message)
         self.assertIn(self.book_one.title, message)
 
+        borrowing = Borrowing.objects.get(id=result.data["id"])
+        mock_create_checkout_session.assert_called_once_with(borrowing)
+
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
     def test_borrowing_book_with_zero_inventory(
-        self, mock_notify_via_telegram
+        self, mock_notify_via_telegram, mock_create_checkout_session
     ):
         book = sample_book(title="Three", inventory=0)
         payload = {
@@ -198,6 +207,41 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertEqual(
             borrowings_before_post_method, borrowings_after_post_method
         )
+        mock_notify_via_telegram.delay.assert_not_called()
+
+    @patch("borrowings_service.services.stripe.checkout.Session.create")
+    @patch("borrowings_service.views.notify_admin_via_telegram")
+    def test_borrowing_returns_503_if_stripe_fails(
+        self, mock_notify_via_telegram, mock_stripe_checkout_session_create
+    ):
+        mock_stripe_checkout_session_create.side_effect = stripe.StripeError
+
+        payload = {
+            "expected_return_date": timezone.localdate() + timedelta(days=1),
+            "book": self.book_one.id,
+        }
+        book_one_inventory_before_borrowing = self.book_one.inventory
+        last_borrowing_before_post = Borrowing.objects.count()
+
+        result = self.client.post(BORROWING_URL, payload)
+
+        self.book_one.refresh_from_db()
+        book_one_inventory_after_borrowing = self.book_one.inventory
+        last_borrowing_after_post = Borrowing.objects.count()
+        payments = Payment.objects.count()
+
+        self.assertEqual(
+            result.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        self.assertEqual(
+            book_one_inventory_before_borrowing,
+            book_one_inventory_after_borrowing,
+        )
+        self.assertEqual(
+            last_borrowing_before_post,
+            last_borrowing_after_post
+        )
+        self.assertEqual(payments, 0)
         mock_notify_via_telegram.delay.assert_not_called()
 
     def test_should_return_400_when_expected_return_date_is_today(self):
@@ -246,8 +290,11 @@ class AuthenticatedBorrowingApiTests(TestCase):
             book_one_inventory_after_borrowing,
         )
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
-    def test_ignore_borrow_date_and_user(self, mock_notify_via_telegram):
+    def test_ignore_borrow_date_and_user(
+        self, mock_notify_via_telegram, mock_create_checkout_session
+    ):
         borrow_date = timezone.localdate() - timedelta(days=1)
         payload = {
             "expected_return_date": timezone.localdate() + timedelta(days=1),
@@ -270,8 +317,11 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertNotIn(borrow_date.strftime("%Y-%m-%d"), message)
         self.assertNotIn(self.user2.email, message)
 
+    @patch("borrowings_service.views.create_checkout_session")
     @patch("borrowings_service.views.notify_admin_via_telegram")
-    def test_borrow_return_endpoint(self, mock_notify_via_telegram):
+    def test_borrow_return_endpoint(
+        self, mock_notify_via_telegram, mock_create_checkout_session
+    ):
         payload = {
             "expected_return_date": timezone.localdate() + timedelta(days=1),
             "book": self.book_one.id,

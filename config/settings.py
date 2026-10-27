@@ -191,3 +191,5 @@ CELERY_ONCE = {
         "default_timeout": 60 * 60,
     },
 }
+
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
