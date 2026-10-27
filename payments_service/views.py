@@ -61,6 +61,15 @@ class PaymentViewSet(
         payment_result = stripe.checkout.Session.retrieve(session_id)
 
         if payment_result["payment_status"] == "paid":
+            if payment.status == Payment.Status.PAID:
+                return Response(
+                    {
+                        "detail": (
+                            "Your borrowing already paid!"
+                        )
+                    },
+                    status=status.HTTP_200_OK,
+                )
             payment.status = Payment.Status.PAID
             payment.save(update_fields=["status"])
             return Response(
@@ -98,13 +107,23 @@ class PaymentViewSet(
                 {"detail": "There is no payment session with this session_id."}
             )
 
-        return Response(
-            {
-                "message": (
-                    "You can pay later, the payment "
-                    "link is only available for 24 hours."
-                ),
-                "url": payment.session_url,
-            },
-            status=status.HTTP_200_OK,
-        )
+        if payment.status == Payment.Status.PENDING:
+            return Response(
+                {
+                    "message": (
+                        "You can pay later, the payment "
+                        "link is only available for 24 hours."
+                    ),
+                    "url": payment.session_url,
+                },
+                status=status.HTTP_200_OK,
+            )
+        if payment.status == Payment.Status.PAID:
+            return Response(
+                {
+                    "detail": (
+                        "Your borrowing already paid!"
+                    )
+                },
+                status=status.HTTP_200_OK,
+            )

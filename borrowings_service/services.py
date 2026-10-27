@@ -13,7 +13,7 @@ def create_checkout_session(borrowing: Borrowing, request: Request):
     unit_amount = borrowing.book.daily_fee * borrowing_days.days
 
     success_url = request.build_absolute_uri(
-        location=reverse("payments_service:payment-success")
+        reverse("payments_service:payment-success")
     )
     cancel_url = request.build_absolute_uri(
         reverse("payments_service:payment-cancel")
