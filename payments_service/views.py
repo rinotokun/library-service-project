@@ -1,5 +1,11 @@
 import stripe
 
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    OpenApiParameter,
+)
+
 from rest_framework import status, viewsets, mixins
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -14,6 +20,48 @@ from payments_service.serializers import (
 )
 
 
+@extend_schema_view(
+    list=extend_schema(
+        description="Gets a list of user's payments (all users if admin)"
+    ),
+    retrieve=extend_schema(
+        description="Gets detailed information about payments"
+    ),
+    success=extend_schema(
+        description=(
+            "Stripe redirects here after payment. Checks the "
+            "session in Stripe and marks the payment as paid"
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="session_id",
+                required=True,
+                type={"type": "string"},
+                description=(
+                    "Stripe Checkout session ID, added by "
+                    "Stripe to the redirect URL"
+                ),
+            ),
+        ],
+    ),
+    cancel=extend_schema(
+        description=(
+            "Stripe redirects here when the payment is cancelled. "
+            "The session stays available for 24 hours"
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="session_id",
+                required=True,
+                type={"type": "string"},
+                description=(
+                    "Stripe Checkout session ID, added by "
+                    "Stripe to the redirect URL"
+                ),
+            ),
+        ],
+    ),
+)
 class PaymentViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
