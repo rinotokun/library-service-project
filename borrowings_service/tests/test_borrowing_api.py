@@ -221,13 +221,13 @@ class AuthenticatedBorrowingApiTests(TestCase):
             "book": self.book_one.id,
         }
         book_one_inventory_before_borrowing = self.book_one.inventory
-        last_borrowing_before_post = Borrowing.objects.count()
+        borrowing_before_post = Borrowing.objects.count()
 
         result = self.client.post(BORROWING_URL, payload)
 
         self.book_one.refresh_from_db()
         book_one_inventory_after_borrowing = self.book_one.inventory
-        last_borrowing_after_post = Borrowing.objects.count()
+        borrowing_after_post = Borrowing.objects.count()
         payments = Payment.objects.count()
 
         self.assertEqual(
@@ -237,10 +237,7 @@ class AuthenticatedBorrowingApiTests(TestCase):
             book_one_inventory_before_borrowing,
             book_one_inventory_after_borrowing,
         )
-        self.assertEqual(
-            last_borrowing_before_post,
-            last_borrowing_after_post
-        )
+        self.assertEqual(borrowing_before_post, borrowing_after_post)
         self.assertEqual(payments, 0)
         mock_notify_via_telegram.delay.assert_not_called()
 
@@ -354,6 +351,7 @@ class AuthenticatedBorrowingApiTests(TestCase):
             book_one_inventory_before_return + 1,
             book_one_inventory_after_return,
         )
+        mock_create_checkout_session.assert_called_once()
 
     def test_cannot_return_twice_same_borrowing(self):
         url = borrowing_return_url(self.borrowing_user1.id)
@@ -386,6 +384,68 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertEqual(
             book_two_inventory_before_return, book_two_inventory_after_return
         )
+
+    @patch("borrowings_service.views.create_checkout_session")
+    def test_return_borrowing_in_expected_return_date(
+        self, mock_create_checkout_session
+    ):
+        borrowing = sample_borrowing(
+            self.user1,
+            book=self.book_two,
+            borrow_date=timezone.localdate() - timedelta(days=1),
+            expected_return_date=timezone.localdate(),
+        )
+        url = borrowing_return_url(borrowing.id)
+
+        result = self.client.post(url)
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        mock_create_checkout_session.assert_not_called()
+
+    @patch("borrowings_service.views.create_checkout_session")
+    def test_return_overdue_borrowing(self, mock_create_checkout_session):
+        borrowing = sample_borrowing(
+            self.user1,
+            book=self.book_two,
+            borrow_date=timezone.localdate() - timedelta(days=5),
+            expected_return_date=timezone.localdate() - timedelta(days=3),
+        )
+        url = borrowing_return_url(borrowing.id)
+
+        result = self.client.post(url)
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(True, mock_create_checkout_session.call_args.args[2])
+        mock_create_checkout_session.assert_called_once()
+
+    @patch("borrowings_service.views.create_checkout_session")
+    def test_return_borrowing_when_stripe_unavailable(
+        self, mock_create_checkout_session
+    ):
+        mock_create_checkout_session.side_effect = stripe.StripeError
+        borrowing = sample_borrowing(
+            self.user1,
+            book=self.book_two,
+            borrow_date=timezone.localdate() - timedelta(days=5),
+            expected_return_date=timezone.localdate() - timedelta(days=3),
+        )
+        url = borrowing_return_url(borrowing.id)
+        book_two_inventory_before_return = self.book_two.inventory
+
+        result = self.client.post(url)
+
+        self.book_two.refresh_from_db()
+        borrowing.refresh_from_db()
+        book_two_inventory_after_return = self.book_two.inventory
+
+        self.assertEqual(
+            result.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        self.assertEqual(
+            book_two_inventory_before_return,
+            book_two_inventory_after_return,
+        )
+        self.assertIsNone(borrowing.actual_return_date)
 
 
 @override_settings(CACHES=DUMMY_CACHE)
