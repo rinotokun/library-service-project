@@ -4,6 +4,12 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    OpenApiParameter,
+)
+
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -22,6 +28,32 @@ from borrowings_service.serializers import (
 )
 
 
+@extend_schema_view(
+    list=extend_schema(
+        description="Gets a list of user's borrowings (all users if admin)",
+        parameters=[
+            OpenApiParameter(
+                name="is_active",
+                type={"type": "string"},
+                description=(
+                    "Filter by borrowings status (ex. ?is_active=true)"
+                ),
+            ),
+            OpenApiParameter(
+                name="user_id",
+                type={"type": "integer"},
+                description="Filter by user id only if admin (ex. ?user_id=1)",
+            ),
+        ],
+    ),
+    retrieve=extend_schema(
+        description="Gets detailed information about borrowings"
+    ),
+    create=extend_schema(description="Create a borrowing"),
+    return_book=extend_schema(
+        description="Returns a borrowed book", request=None
+    ),
+)
 class BorrowingViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
