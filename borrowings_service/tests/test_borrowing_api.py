@@ -3,7 +3,7 @@ from decimal import Decimal
 from unittest.mock import patch, ANY
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -21,10 +21,6 @@ from borrowings_service.serializers import (
 
 from payments_service.models import Payment
 from users_service.serializers import UserShortInfoSerializer
-
-DUMMY_CACHE = {
-    "default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}
-}
 
 
 BORROWING_URL = reverse("borrowings_service:borrowing-list")
@@ -68,7 +64,6 @@ def sample_borrowing(user, **param):
     return Borrowing.objects.create(user=user, **param)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class UnauthenticatedBorrowingApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -89,7 +84,6 @@ class UnauthenticatedBorrowingApiTests(TestCase):
         self.assertEqual(result.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class AuthenticatedBorrowingApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -448,7 +442,6 @@ class AuthenticatedBorrowingApiTests(TestCase):
         self.assertIsNone(borrowing.actual_return_date)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class AdminBorrowingApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -510,7 +503,6 @@ class AdminBorrowingApiTests(TestCase):
         self.assertTrue(Book.objects.filter(id=self.book_one.id).exists())
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class BorrowingFilterApiTest(TestCase):
     def setUp(self):
         self.client = APIClient()
