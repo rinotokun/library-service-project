@@ -20,5 +20,5 @@ class Book(models.Model):
         return self.title
 
     @property
-    def is_available(self):
+    def is_available(self) -> bool:
         return self.inventory > 0
