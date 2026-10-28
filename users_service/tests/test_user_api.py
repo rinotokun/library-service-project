@@ -1,23 +1,14 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 from rest_framework.test import APIClient
 from rest_framework import status
 
-
-DUMMY_CACHE = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache"
-    }
-}
-
-
 USER_CREATE_URL = reverse("users_service:create")
 USER_MANAGE_URL = reverse("users_service:manage")
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class UserApiTest(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -26,7 +17,7 @@ class UserApiTest(TestCase):
         payload = {
             "email": "user@user.com",
             "password": "Password12345",
-            "is_staff": True
+            "is_staff": True,
         }
 
         result = self.client.post(USER_CREATE_URL, payload)

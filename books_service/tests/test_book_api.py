@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 from rest_framework.test import APIClient
@@ -9,14 +9,6 @@ from rest_framework import status
 
 from books_service.models import Book
 from books_service.serializers import BookSerializer, BookListSerializer
-
-
-DUMMY_CACHE = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache"
-    }
-}
-
 
 BOOK_URL = reverse("books_service:book-list")
 
@@ -31,21 +23,19 @@ def sample_book(**params):
         "author": "Joanne Rowling",
         "cover": Book.Cover.HARD,
         "inventory": 5,
-        "daily_fee": Decimal("1.49")
+        "daily_fee": Decimal("1.49"),
     }
     defaults.update(params)
 
     return Book.objects.create(**defaults)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class UnauthenticatedBookApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.book = sample_book()
         self.book_not_available = sample_book(
-            title="Harry Potter and the Chamber of Secrets",
-            inventory=0
+            title="Harry Potter and the Chamber of Secrets", inventory=0
         )
 
     def test_get_book_list(self):
@@ -78,7 +68,7 @@ class UnauthenticatedBookApiTests(TestCase):
             "author": "Joanne Rowling",
             "cover": Book.Cover.HARD,
             "inventory": 5,
-            "daily_fee": Decimal("1.49")
+            "daily_fee": Decimal("1.49"),
         }
 
         result = self.client.post(BOOK_URL, payload)
@@ -86,7 +76,6 @@ class UnauthenticatedBookApiTests(TestCase):
         self.assertEqual(result.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class AuthenticatedBookApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -102,7 +91,7 @@ class AuthenticatedBookApiTests(TestCase):
             "author": "Joanne Rowling",
             "cover": Book.Cover.HARD,
             "inventory": 5,
-            "daily_fee": Decimal("1.49")
+            "daily_fee": Decimal("1.49"),
         }
 
         result = self.client.post(BOOK_URL, payload)
@@ -110,14 +99,11 @@ class AuthenticatedBookApiTests(TestCase):
         self.assertEqual(result.status_code, status.HTTP_403_FORBIDDEN)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class AdminBookApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
-            email="admin@admin.com",
-            password="password",
-            is_staff=True
+            email="admin@admin.com", password="password", is_staff=True
         )
         self.client.force_authenticate(self.user)
 
@@ -129,7 +115,7 @@ class AdminBookApiTests(TestCase):
             "author": "Joanne Rowling",
             "cover": Book.Cover.SOFT,
             "inventory": 5,
-            "daily_fee": Decimal("1.49")
+            "daily_fee": Decimal("1.49"),
         }
 
         result = self.client.post(BOOK_URL, payload)
@@ -157,13 +143,8 @@ class AdminBookApiTests(TestCase):
 
         result = self.client.delete(url)
 
-        self.assertEqual(
-            result.status_code,
-            status.HTTP_204_NO_CONTENT
-        )
-        self.assertFalse(
-            Book.objects.filter(id=self.book.id).exists()
-        )
+        self.assertEqual(result.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Book.objects.filter(id=self.book.id).exists())
 
     def test_create_book_with_negative_inventory_not_allowed(self):
         payload = {
@@ -171,7 +152,7 @@ class AdminBookApiTests(TestCase):
             "author": "Joanne Rowling",
             "cover": Book.Cover.SOFT,
             "inventory": -5,
-            "daily_fee": Decimal("1.49")
+            "daily_fee": Decimal("1.49"),
         }
 
         result = self.client.post(BOOK_URL, payload)

@@ -1,0 +1,55 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: >
+      sh -c "python manage.py wait_for_db &&
+            python manage.py collectstatic --no-input &&
+            python manage.py migrate &&
+            gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 10 --no-control-socket"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - library_service_db:$PGDATA
+
+  redis:
+    image: redis:7.4-alpine
+    restart: always
+
+  celery:
+    build:
+      context: .
+    command: "celery -A config worker -l info"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - app
+      - redis
+    restart: always
+
+  celery-beat:
+    build:
+      context: .
+    command: "celery -A config beat -l INFO"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - app
+      - redis
+    restart: always
+
+volumes:
+  library_service_db:

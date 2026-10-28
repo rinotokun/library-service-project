@@ -5,7 +5,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -17,11 +17,6 @@ from borrowings_service.models import Borrowing
 
 from payments_service.models import Payment
 from payments_service.serializers import PaymentDetailSerializer
-
-DUMMY_CACHE = {
-    "default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}
-}
-
 
 PAYMENT_URL = reverse("payments_service:payment-list")
 PAYMENT_SUCCESS_URL = reverse("payments_service:payment-success")
@@ -71,7 +66,6 @@ def sample_payment(borrowing, **params):
     return Payment.objects.create(**defaults)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class UnauthenticatedPaymentApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -211,7 +205,6 @@ class UnauthenticatedPaymentApiTests(TestCase):
         self.assertEqual(result.data["detail"], "Your borrowing already paid!")
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class AuthenticatedPaymentApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -303,7 +296,6 @@ class AuthenticatedPaymentApiTests(TestCase):
         self.assertEqual(expected_list, actual_list)
 
 
-@override_settings(CACHES=DUMMY_CACHE)
 class AdminPaymentApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
