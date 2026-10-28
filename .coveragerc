@@ -1,0 +1,24 @@
+[run]
+data_file = /tmp/.coverage
+
+branch = True
+source =
+    books_service
+    borrowings_service
+    notifications_service
+    payments_service
+    users_service
+
+[report]
+omit =
+    */migrations/*
+    */tests/*
+    */admin.py
+    */apps.py
+    config/*
+    manage.py
+
+exclude_lines =
+    pragma: no cover
+    def __str__
+    if __name__ == .__main__.:
