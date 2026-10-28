@@ -2,6 +2,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from books_service.models import Book
 from borrowings_service.models import Borrowing
 
 from users_service.serializers import UserShortInfoSerializer
@@ -19,13 +20,6 @@ class BorrowingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Expected return date must " "be greater than borrow date"
             )
-
-        return value
-
-    def validate_book(self, value):
-
-        if not value.is_available:
-            raise serializers.ValidationError("Cannot borrow unavailable book")
 
         return value
 
@@ -47,7 +41,14 @@ class BorrowingSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         with transaction.atomic():
-            book = validated_data.pop("book")
+            book_instance = validated_data.pop("book")
+
+            book = Book.objects.select_for_update().get(pk=book_instance.pk)
+
+            if not book.is_available:
+                raise serializers.ValidationError(
+                    {"book": "Cannot borrow unavailable book"}
+                )
 
             book.inventory -= 1
             book.save(update_fields=["inventory"])
