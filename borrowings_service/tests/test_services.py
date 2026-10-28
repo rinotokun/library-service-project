@@ -53,6 +53,13 @@ class CreateCheckoutSessionTests(TestCase):
             book=self.book_one,
             expected_return_date=timezone.localdate() + timedelta(days=3)
         )
+        self.borrowing_overdue = sample_borrowing(
+            self.user,
+            book=self.book_one,
+            borrow_date=timezone.localdate() - timedelta(days=4),
+            expected_return_date=timezone.localdate() - timedelta(days=3),
+            actual_return_date=timezone.localdate(),
+        )
 
     @patch("borrowings_service.services.stripe.checkout.Session.create")
     def test_create_payment(self, mock_stripe_checkout_session_create):
@@ -105,3 +112,28 @@ class CreateCheckoutSessionTests(TestCase):
             int,
         )
         self.assertEqual(expected_kwargs, actual_kwargs)
+
+    @patch("borrowings_service.services.stripe.checkout.Session.create")
+    def test_create_payment_with_is_fine_true(
+        self, mock_stripe_checkout_session_create
+    ):
+        mock_stripe_checkout_session_create.return_value = {
+            "url": "http://stripe-session",
+            "id": "id_stripe_session",
+        }
+        factory = APIRequestFactory()
+        request = factory.get("/notes/")
+
+        create_checkout_session(self.borrowing_overdue, request, True)
+
+        payment = Payment.objects.last()
+
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+        self.assertEqual(payment.payment_type, Payment.PaymentType.FINE)
+        self.assertEqual(payment.money_to_pay, Decimal("8.94"))
+        mock_stripe_checkout_session_create.assert_called_once()
+
+        stripe_kwargs = mock_stripe_checkout_session_create.call_args.kwargs
+        self.assertEqual(
+            stripe_kwargs["line_items"][0]["price_data"]["unit_amount"], 894
+        )
