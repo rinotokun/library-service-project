@@ -12,6 +12,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
+from borrowings_service.exceptions import ServiceUnavailable
+
 from payments_service.models import Payment
 from payments_service.serializers import (
     PaymentSerializer,
@@ -106,7 +108,10 @@ class PaymentViewSet(
                 {"detail": "There is no payment session with this session_id."}
             )
 
-        payment_result = stripe.checkout.Session.retrieve(session_id)
+        try:
+            payment_result = stripe.checkout.Session.retrieve(session_id)
+        except stripe.StripeError:
+            raise ServiceUnavailable
 
         if payment_result["payment_status"] == "paid":
             if payment.status == Payment.Status.PAID:
