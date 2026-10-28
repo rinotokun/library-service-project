@@ -22,7 +22,6 @@ from borrowings_service.serializers import (
 from payments_service.models import Payment
 from users_service.serializers import UserShortInfoSerializer
 
-
 BORROWING_URL = reverse("borrowings_service:borrowing-list")
 
 
@@ -151,7 +150,8 @@ class AuthenticatedBorrowingApiTests(TestCase):
         }
         book_one_inventory_before_borrowing = self.book_one.inventory
 
-        result = self.client.post(BORROWING_URL, payload)
+        with self.captureOnCommitCallbacks(execute=True):
+            result = self.client.post(BORROWING_URL, payload)
 
         self.book_one.refresh_from_db()
         book_one_inventory_after_borrowing = self.book_one.inventory
@@ -191,7 +191,8 @@ class AuthenticatedBorrowingApiTests(TestCase):
         }
         borrowings_before_post_method = Borrowing.objects.count()
 
-        result = self.client.post(BORROWING_URL, payload)
+        with self.captureOnCommitCallbacks(execute=True):
+            result = self.client.post(BORROWING_URL, payload)
         book.refresh_from_db()
         borrowings_after_post_method = Borrowing.objects.count()
 
@@ -294,7 +295,8 @@ class AuthenticatedBorrowingApiTests(TestCase):
             "user": self.user2,
         }
 
-        result = self.client.post(BORROWING_URL, payload)
+        with self.captureOnCommitCallbacks(execute=True):
+            result = self.client.post(BORROWING_URL, payload)
 
         self.assertEqual(result.status_code, status.HTTP_201_CREATED)
         self.assertEqual(
@@ -317,7 +319,10 @@ class AuthenticatedBorrowingApiTests(TestCase):
             "expected_return_date": timezone.localdate() + timedelta(days=1),
             "book": self.book_one.id,
         }
-        borrowing_result = self.client.post(BORROWING_URL, payload)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            borrowing_result = self.client.post(BORROWING_URL, payload)
+
         self.book_one.refresh_from_db()
         mock_notify_via_telegram.delay.assert_called_once()
 

@@ -131,7 +131,9 @@ class BorrowingViewSet(
                 f"📅 Borrow Date: {borrowing.borrow_date}\n"
                 f"⏳ Expected Return: {borrowing.expected_return_date}"
             )
-            notify_admin_via_telegram.delay(message)
+            transaction.on_commit(
+                lambda: notify_admin_via_telegram.delay(message)
+            )
 
     @action(
         methods=["POST"],
