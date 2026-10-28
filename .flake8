@@ -8,4 +8,6 @@ exclude =
     **migrations
     venv
 per-file-ignores =
-    config/settings.py:F403,F405,E501
+    config/settings/base.py:F403,F405,E501
+    config/settings/prod.py:F403,F405,E501
+    config/settings/dev.py:F403,F405,E501
