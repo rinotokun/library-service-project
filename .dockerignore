@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.sample
+.DS_Store
+*.log
+logs/
+Dockerfile
+venv/
+/__pycache__/
+.pytest_cache/
+.dockerignore
+*.log
+**db.sqlite3
+.coverage
+htmlcov/
